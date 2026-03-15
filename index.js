@@ -9,25 +9,25 @@ const fs = require('fs');
 
 // 1. CONFIG LOAD
 let rawdata = fs.readFileSync('config.json');
-let data = JSON.parse(rawdata);
-const host = data["ip"];
-const username = data["name"];
+let config = JSON.parse(rawdata); // Renamed to 'config' to match UI variables
+const host = config["ip"];
+const username = config["name"];
 const webPort = process.env.PORT || 3000;
 
 let death = 0, pvpc = 0;
 let guardPos = null;
 let bot;
+const startTime = Date.now();
 
 function createBotInstance() {
     bot = mineflayer.createBot({
         host: host,
-        port: data["port"],
+        port: config["port"],
         username: username,
-        version: data["version"] || false,
+        version: config["version"] || false,
         viewDistance: "tiny"
     });
 
-    // Load Plugins
     bot.loadPlugin(cmd);
     bot.loadPlugin(pvp);
     bot.loadPlugin(armorManager);
@@ -36,30 +36,24 @@ function createBotInstance() {
     bot.on('spawn', () => {
         const mcData = require('minecraft-data')(bot.version);
         const defaultMove = new Movements(bot, mcData);
-        
-        // Pathfinding Tweaks
         defaultMove.canDig = false; 
         defaultMove.allowParkour = true;
         bot.pathfinder.setMovements(defaultMove);
-        
         console.log("Bot spawned and pathfinder movements set.");
     });
 
-    // --- CHAT COMMANDS ---
     bot.on('chat', (sender, message) => {
         if (sender === bot.username) return;
         const target = bot.players[sender]?.entity;
 
-        // FOLLOW COMMAND
         if (message === `follow ${bot.username}`) {
             if (!target) return bot.chat("I can't see you!");
             bot.chat(`I am following you, ${sender}!`);
-            guardPos = null; // Clear guard position
-            bot.pvp.stop();  // Stop fighting to move
+            guardPos = null;
+            bot.pvp.stop(); 
             bot.pathfinder.setGoal(new GoalFollow(target, 2), true);
         }
 
-        // GUARD COMMAND
         if (message === `guard ${bot.username}`) {
             if (!target) return bot.chat("I can't see you!");
             bot.chat(`Guarding this spot, ${sender}.`);
@@ -67,7 +61,6 @@ function createBotInstance() {
             bot.pathfinder.setGoal(new GoalBlock(guardPos.x, guardPos.y, guardPos.z));
         }
 
-        // FIGHT COMMAND
         if (message === `fight me ${bot.username}`) {
             if (!target) return bot.chat("Come closer if you want to fight!");
             pvpc++;
@@ -75,7 +68,6 @@ function createBotInstance() {
             bot.pvp.attack(target);
         }
 
-        // STOP COMMAND
         if (message === `stop`) {
             bot.chat('Stopping all movement and combat.');
             guardPos = null;
@@ -84,9 +76,7 @@ function createBotInstance() {
         }
     });
 
-    // GUARD & PATHFINDING LOGIC
     bot.on('physicsTick', () => {
-        // If guarding and an enemy is nearby, prioritize PVP
         if (guardPos) {
             const filter = e => (e.type === 'mob' || e.type === 'player') && 
                                  e.position.distanceTo(bot.entity.position) < 16 &&
@@ -97,7 +87,6 @@ function createBotInstance() {
                 bot.pvp.attack(entity);
             } 
 
-            // If we have moved too far from our guard post during a fight, go back
             if (!bot.pvp.target && bot.entity.position.distanceTo(guardPos) > 2) {
                 bot.pathfinder.setGoal(new GoalBlock(guardPos.x, guardPos.y, guardPos.z));
             }
@@ -110,21 +99,42 @@ function createBotInstance() {
         bot.chat("I'll be back.");
     });
 
-    bot.on('end', () => setTimeout(createBotInstance, 30000));
+    bot.on('end', () => {
+        console.log("Bot disconnected. Reconnecting in 30s...");
+        setTimeout(createBotInstance, 30000);
+    });
 }
 
-// DASHBOARD
+// --- DASHBOARD & API ---
 const app = express();
+
+// Health Check API for the UI to poll
+app.get('/health', (req, res) => {
+    res.json({
+        status: bot && bot.entity ? 'connected' : 'reconnecting',
+        uptime: Math.floor((Date.now() - startTime) / 1000),
+        coords: bot && bot.entity ? bot.entity.position : null,
+        stats: { fights: pvpc, deaths: death }
+    });
+});
+
+// Main Dashboard UI
 app.get('/', (req, res) => {
     res.send(`
-        <body style="font-family:sans-serif; background:#121212; color:white; text-align:center;">
-            <h1>🤖 ${username} Status</h1>
-            <div style="font-size: 1.5em; margin: 20px;">
-                <p>⚔️ Fights: ${pvpc} | 💀 Deaths: ${death}</p>
-                <p>📍 Mode: ${guardPos ? 'Guarding Area' : 'Idle/Following'}</p>
-            </div>
-            <script>setTimeout(() => location.reload(), 5000);</script>
-        </body>
-    `);
-});
-app.listen(webPort, () => createBotInstance());
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${username} Status</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+          .container { background: #1e293b; padding: 40px; border-radius: 20px; box-shadow: 0 0 50px rgba(45, 212, 191, 0.2); text-align: center; width: 400px; border: 1px solid #334155; transition: all 0.5s ease; }
+          h1 { margin-bottom: 30px; font-size: 24px; color: #ccfbf1; display: flex; align-items: center; justify-content: center; gap: 10px; }
+          .stat-card { background: #0f172a; padding: 15px; margin: 15px 0; border-radius: 12px; border-left: 5px solid #2dd4bf; text-align: left; box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3); }
+          .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+          .value { font-size: 16px; font-weight: bold; color: #2dd4bf; text-shadow: 0 0 10px rgba(45, 212, 191, 0.3); margin-top: 5px; }
+          .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px currentColor; background-color: currentColor; }
+          .pulse { animation: pulse 2s infinite; }
+          @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+          .connection-bar { height: 4px; background: #334155; width: 100%; margin-top: 20px; border-radius: 2px; overflow: hidden; }
+          .connection-fill { height: 100%; width: 100%; background: #2dd4bf
