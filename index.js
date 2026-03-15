@@ -1,7 +1,7 @@
 const mineflayer = require('mineflayer')
 const pvp = require('mineflayer-pvp').plugin
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
-const { GoalFollow, GoalBlock } = goals // Added GoalFollow here
+const { GoalFollow, GoalBlock } = goals
 const armorManager = require('mineflayer-armor-manager')
 const cmd = require('mineflayer-cmd').plugin
 const express = require('express')
@@ -14,7 +14,7 @@ const host = data["ip"];
 const username = data["name"];
 const webPort = process.env.PORT || 3000;
 
-let death = 0, simp = 0, popularity = 0, pvpc = 0;
+let death = 0, pvpc = 0;
 let guardPos = null;
 let bot;
 
@@ -27,37 +27,42 @@ function createBotInstance() {
         viewDistance: "tiny"
     });
 
+    // Load Plugins
     bot.loadPlugin(cmd);
     bot.loadPlugin(pvp);
     bot.loadPlugin(armorManager);
     bot.loadPlugin(pathfinder);
 
-    bot.on('inject_allowed', () => { bot.physics.yieldInterval = 20; });
-
     bot.on('spawn', () => {
         const mcData = require('minecraft-data')(bot.version);
-        const movements = new Movements(bot, mcData);
-        movements.canDig = false;
-        bot.pathfinder.setMovements(movements);
+        const defaultMove = new Movements(bot, mcData);
+        
+        // Pathfinding Tweaks
+        defaultMove.canDig = false; 
+        defaultMove.allowParkour = true;
+        bot.pathfinder.setMovements(defaultMove);
+        
+        console.log("Bot spawned and pathfinder movements set.");
     });
 
     // --- CHAT COMMANDS ---
-    bot.on('chat', (username, message) => {
-        if (username === bot.username) return;
-        const target = bot.players[username]?.entity;
+    bot.on('chat', (sender, message) => {
+        if (sender === bot.username) return;
+        const target = bot.players[sender]?.entity;
 
         // FOLLOW COMMAND
         if (message === `follow ${bot.username}`) {
             if (!target) return bot.chat("I can't see you!");
-            bot.chat(`I am following you, ${username}!`);
-            guardPos = null; // Stop guarding to follow
+            bot.chat(`I am following you, ${sender}!`);
+            guardPos = null; // Clear guard position
+            bot.pvp.stop();  // Stop fighting to move
             bot.pathfinder.setGoal(new GoalFollow(target, 2), true);
         }
 
         // GUARD COMMAND
         if (message === `guard ${bot.username}`) {
             if (!target) return bot.chat("I can't see you!");
-            bot.chat(`Guarding this spot, ${username}.`);
+            bot.chat(`Guarding this spot, ${sender}.`);
             guardPos = target.position.clone();
             bot.pathfinder.setGoal(new GoalBlock(guardPos.x, guardPos.y, guardPos.z));
         }
@@ -66,6 +71,7 @@ function createBotInstance() {
         if (message === `fight me ${bot.username}`) {
             if (!target) return bot.chat("Come closer if you want to fight!");
             pvpc++;
+            bot.chat("En garde!");
             bot.pvp.attack(target);
         }
 
@@ -78,12 +84,30 @@ function createBotInstance() {
         }
     });
 
-    // GUARD COMBAT LOGIC
-    bot.on('physicTick', () => {
-        if (!guardPos || bot.pvp.target) return;
-        const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16;
-        const entity = bot.nearestEntity(filter);
-        if (entity) bot.pvp.attack(entity);
+    // GUARD & PATHFINDING LOGIC
+    bot.on('physicsTick', () => {
+        // If guarding and an enemy is nearby, prioritize PVP
+        if (guardPos) {
+            const filter = e => (e.type === 'mob' || e.type === 'player') && 
+                                 e.position.distanceTo(bot.entity.position) < 16 &&
+                                 e.username !== bot.username;
+            
+            const entity = bot.nearestEntity(filter);
+            if (entity && !bot.pvp.target) {
+                bot.pvp.attack(entity);
+            } 
+
+            // If we have moved too far from our guard post during a fight, go back
+            if (!bot.pvp.target && bot.entity.position.distanceTo(guardPos) > 2) {
+                bot.pathfinder.setGoal(new GoalBlock(guardPos.x, guardPos.y, guardPos.z));
+            }
+        }
+    });
+
+    bot.on('death', () => {
+        death++;
+        guardPos = null;
+        bot.chat("I'll be back.");
     });
 
     bot.on('end', () => setTimeout(createBotInstance, 30000));
@@ -94,10 +118,12 @@ const app = express();
 app.get('/', (req, res) => {
     res.send(`
         <body style="font-family:sans-serif; background:#121212; color:white; text-align:center;">
-            <h1>🤖 ${username} Online</h1>
-            <p>Fights: ${pvpc} | Deaths: ${death}</p>
-            <p>Current Goal: ${guardPos ? 'Guarding Area' : 'Idle/Following'}</p>
-            <script>setTimeout(() => location.reload(), 10000);</script>
+            <h1>🤖 ${username} Status</h1>
+            <div style="font-size: 1.5em; margin: 20px;">
+                <p>⚔️ Fights: ${pvpc} | 💀 Deaths: ${death}</p>
+                <p>📍 Mode: ${guardPos ? 'Guarding Area' : 'Idle/Following'}</p>
+            </div>
+            <script>setTimeout(() => location.reload(), 5000);</script>
         </body>
     `);
 });
