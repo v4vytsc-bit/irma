@@ -9,7 +9,7 @@ const fs = require('fs');
 
 // 1. CONFIG LOAD
 let rawdata = fs.readFileSync('config.json');
-let config = JSON.parse(rawdata); // Renamed to 'config' to match UI variables
+let config = JSON.parse(rawdata); 
 const host = config["ip"];
 const username = config["name"];
 const webPort = process.env.PORT || 3000;
@@ -108,7 +108,6 @@ function createBotInstance() {
 // --- DASHBOARD & API ---
 const app = express();
 
-// Health Check API for the UI to poll
 app.get('/health', (req, res) => {
     res.json({
         status: bot && bot.entity ? 'connected' : 'reconnecting',
@@ -118,7 +117,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Main Dashboard UI
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -128,13 +126,8 @@ app.get('/', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
           body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-          .container { background: #1e293b; padding: 40px; border-radius: 20px; box-shadow: 0 0 50px rgba(45, 212, 191, 0.2); text-align: center; width: 400px; border: 1px solid #334155; transition: all 0.5s ease; }
+          .container { background: #1e293b; padding: 40px; border-radius: 20px; box-shadow: 0 0 50px rgba(45, 212, 191, 0.2); text-align: center; width: 400px; border: 1px solid #334155; }
           h1 { margin-bottom: 30px; font-size: 24px; color: #ccfbf1; display: flex; align-items: center; justify-content: center; gap: 10px; }
-          .stat-card { background: #0f172a; padding: 15px; margin: 15px 0; border-radius: 12px; border-left: 5px solid #2dd4bf; text-align: left; box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3); }
+          .stat-card { background: #0f172a; padding: 15px; margin: 15px 0; border-radius: 12px; border-left: 5px solid #2dd4bf; text-align: left; }
           .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
-          .value { font-size: 16px; font-weight: bold; color: #2dd4bf; text-shadow: 0 0 10px rgba(45, 212, 191, 0.3); margin-top: 5px; }
-          .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px currentColor; background-color: currentColor; }
-          .pulse { animation: pulse 2s infinite; }
-          @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
-          .connection-bar { height: 4px; background: #334155; width: 100%; margin-top: 20px; border-radius: 2px; overflow: hidden; }
-          .connection-fill { height: 100%; width: 100%; background: #2dd4bf
+          .value { font-size: 16px; font-weight: bold; color: #2dd4bf; margin-top: 5px; }
