@@ -1,7 +1,7 @@
 {
 	"ip":"Inferno-Realm.aternos.me",
 	"port": 47038,
-	"name": "Cube",
+	"name": "newbie",
 	"auto-night-skip":"false",
 	"login-enabled":"false",
 	"register-cmd":"/register MR_MR121 MR_MR121",
