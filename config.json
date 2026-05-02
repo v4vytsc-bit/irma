@@ -5,8 +5,12 @@
 	"auto-night-skip":"false",
 	"login-enabled":"false",
 	"register-cmd":"/register MR_MR121 MR_MR121",
-	"login-cmd":"/login MR_MR121"
-
+	"login-cmd":"/login MR_MR121",
+	"movement": {
+		"enabled": true,
+		"circleRadius": 5,
+		"jumpInterval": 3000,
+		"sneakInterval": 5000,
+		"moveSpeed": 0.1
+	}
 }
-
-
