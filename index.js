@@ -1,6 +1,5 @@
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
 const express = require('express')
 const fs = require('fs')
 
@@ -65,7 +64,6 @@ function createBot() {
     });
 
     bot.loadPlugin(pathfinder);
-    bot.loadPlugin(pvp);
 
     bot.on('spawn', () => {
         status = "ONLINE";
